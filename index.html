@@ -301,6 +301,8 @@ td[data-label="#Tags"], td[data-label="Total Eng"]{font-size:11px;color:var(--mu
   <div class="topbar">
     <h1 id="dashTitle">📊 แกะกราฟกับกุ๊ก · Social Dashboard</h1>
     <div class="top-actions no-print">
+      <button type="button" class="btn" id="reportBtn" onclick="openReport()" hidden>📄 รายงานสรุป</button>
+      <button type="button" class="btn btn-ghost" id="reportPdfBtn" onclick="downloadReportPdf()" hidden>⬇ PDF</button>
       <button type="button" class="btn" id="weeklyBtn" onclick="toggleWeekly()">📅 Weekly Report</button>
       <button type="button" class="btn btn-ghost logout" onclick="logout()">ออกจากระบบ</button>
     </div>
@@ -820,6 +822,32 @@ async function openBlob(o, key){
   const pt = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:B64(o.i)}, key, B64(o.c)));
   return JSON.parse(new TextDecoder().decode(o.z === 'gzip' ? await gunzip(pt) : pt));
 }
+async function openRaw(o, key){                        // ไฟล์ที่ไม่ใช่ JSON (รายงาน HTML/PDF)
+  const pt = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:B64(o.i)}, key, B64(o.c)));
+  return o.z === 'gzip' ? await gunzip(pt) : pt;
+}
+async function fetchReport(name, type){
+  const r = await fetch(MAN.files[name], {cache:'no-store'});
+  if (!r.ok) throw new Error('noreport');
+  return URL.createObjectURL(new Blob([await openRaw(await r.json(), KEY)], {type}));
+}
+async function openReport(){
+  const w = window.open('', '_blank');                  // เปิดหน้าต่างก่อน await (กัน popup blocker)
+  if (w) w.document.write('<p style="font-family:sans-serif;padding:24px">กำลังเปิดรายงาน…</p>');
+  try {
+    const url = await fetchReport('report_html', 'text/html');
+    if (w) w.location.replace(url); else location.href = url;
+  } catch (e) { if (w) w.close(); alert('เปิดรายงานไม่ได้ — ลองโหลดหน้าใหม่'); }
+}
+async function downloadReportPdf(){
+  const b = G('reportPdfBtn'); b.disabled = true; const t = b.textContent; b.textContent = 'กำลังเตรียม…';
+  try {
+    const url = await fetchReport('report_pdf', 'application/pdf');
+    const a = document.createElement('a'); a.href = url; a.download = 'KaeGraphGapKook_Competitor_Report.pdf';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { alert('ดาวน์โหลดไม่ได้ — ลองโหลดหน้าใหม่'); }
+  b.disabled = false; b.textContent = t;
+}
 async function deriveKey(user, pass){
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(user + ':' + pass), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey({name:'PBKDF2', salt:B64(MAN.kdf.s), iterations:MAN.kdf.n, hash:'SHA-256'},
@@ -858,6 +886,8 @@ async function unlock(key, user){
   const range = (m.date_min && m.date_max) ? ` · โพสต์ ${esc(m.date_min)} → ${esc(m.date_max)}` : '';
   G('dashSub').innerHTML = `จากไฟล์ <code>${esc(m.source || '-')}</code>${range} · เรียงตาม Shares → Saves → Comments → Likes`;
   KEY = key;
+  if (MAN.files.report_html) G('reportBtn').hidden = false;
+  if (MAN.files.report_pdf) G('reportPdfBtn').hidden = false;
   G('gate').remove();
   G('app').hidden = false;
   applyWatermark(user || 'KOOK');
