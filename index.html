@@ -870,7 +870,7 @@ G('gform').addEventListener('submit', async ev => {
   ev.preventDefault();
   G('gerr').classList.remove('on');
   const btn = G('gb'); btn.disabled = true; btn.textContent = 'กำลังถอดรหัส…';
-  const user = G('gu').value.trim(), pass = G('gp').value, remember = G('grem').checked;
+  const user = G('gu').value.trim(), pass = G('gp').value.trim(), remember = G('grem').checked;
   let key;
   try {
     await MANP;
